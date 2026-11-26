@@ -1,0 +1,16 @@
+route:
+  receiver: webhook
+  group_by: [alertname]
+  group_wait: 10s          # wait a bit to batch alerts that fire together
+  group_interval: 1m
+  repeat_interval: 1h      # remind, but not every minute
+
+receivers:
+  - name: webhook
+    webhook_configs:
+      - url: http://webhook:8080/
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers: [alertname="AppDown"]          # the app is down -> don't also
+    target_matchers: [alertname=~"HighErrorRate|HighLatencyP95"]   # page for its symptoms

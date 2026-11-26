@@ -1,0 +1,42 @@
+groups:
+  - name: lab14-recording
+    rules:
+      - record: job:http_requests:rate1m
+        expr: sum by (job) (rate(http_requests_total[1m]))
+      - record: job:http_errors:ratio_rate1m
+        expr: |
+          sum by (job) (rate(http_requests_total{status=~"5.."}[1m]))
+            /
+          sum by (job) (rate(http_requests_total[1m]))
+      - record: job:http_request_duration_seconds:p95_1m
+        expr: histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_seconds_bucket[1m])))
+
+  - name: lab14-alerts
+    rules:
+      - alert: AppDown
+        expr: up{job="lab14-app"} == 0 or absent(up{job="lab14-app"})
+        for: 30s
+        labels:
+          severity: page
+        annotations:
+          summary: "lab14-app: a target is down, or there are no targets at all"
+          runbook_url: "https://github.com/mergentlegen/lab14-observability/blob/main/runbooks/app-down.md"
+
+      - alert: HighErrorRate
+        expr: job:http_errors:ratio_rate1m > 0.02 and job:http_requests:rate1m > 0.5
+        for: 1m
+        labels:
+          severity: page
+        annotations:
+          summary: "5xx ratio is {{ $value | humanizePercentage }} (> 2%)"
+          runbook_url: "https://github.com/mergentlegen/lab14-observability/blob/main/runbooks/high-error-rate.md"
+
+      # TODO 1 (done): p95 above 0.5 s for 1m, severity ticket
+      - alert: HighLatencyP95
+        expr: job:http_request_duration_seconds:p95_1m > 0.5
+        for: 1m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "p95 latency is {{ $value | humanizeDuration }} (> 500ms)"
+          runbook_url: "https://github.com/mergentlegen/lab14-observability/blob/main/runbooks/high-latency-p95.md"
